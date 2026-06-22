@@ -1,0 +1,11 @@
+telethon==1.44.0
+py-tgcalls==2.3.3
+python-socks[asyncio]==2.8.1
+pipecat-ai[deepgram,cartesia,silero,openai]>=1.4.0
+websockets==15.0.1
+httpx==0.28.1
+numpy==2.2.6
+webrtcvad-wheels==2.0.14
+qrcode==8.2
+edge-tts>=7.2.0
+av>=17.0.0

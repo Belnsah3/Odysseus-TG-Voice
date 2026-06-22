@@ -1,0 +1,31 @@
+
+# Data
+# IDE
+# OS
+# Python
+# Secrets
+# Temp / pipes
+*.db
+*.egg-info/
+*.py[cod]
+*.session
+*.session-journal
+*.sqlite
+*.sqlite3
+*.swo
+*.swp
+.DS_Store
+.env
+.idea/
+.venv/
+.vscode/
+/tmp/odysseus*.pipe
+Thumbs.db
+__pycache__/
+chromadb-data/
+models/avatar.vrm
+odysseus/
+odysseus/data/
+odysseus/logs/
+venv/
+voice_bridge/sessions/

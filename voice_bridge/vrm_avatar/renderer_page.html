@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>VRM Avatar Renderer</title>
+  <script type="importmap">
+  {
+    "imports": {
+      "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js",
+      "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/",
+      "@pixiv/three-vrm": "https://cdn.jsdelivr.net/npm/@pixiv/three-vrm@3.3.3/lib/three-vrm.module.js"
+    }
+  }
+  </script>
+  <style>
+    body { margin: 0; overflow: hidden; background: #1a1a2e; }
+    canvas { display: block; }
+  </style>
+</head>
+<body>
+<script type="module">
+import * as THREE from 'three';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { VRMLoaderPlugin, VRMUtils } from '@pixiv/three-vrm';
+
+const params = new URLSearchParams(window.location.search);
+const modelUrl = params.get('model') || 'avatar.vrm';
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x1a1a2e);
+
+const camera = new THREE.PerspectiveCamera(30, 640 / 480, 0.1, 100);
+camera.position.set(0, 1.3, 2.5);
+camera.lookAt(0, 1.2, 0);
+
+const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+renderer.setSize(640, 480);
+renderer.setPixelRatio(1);
+document.body.appendChild(renderer.domElement);
+
+const light = new THREE.DirectionalLight(0xffffff, 1.0);
+light.position.set(1, 2, 3);
+scene.add(light);
+scene.add(new THREE.AmbientLight(0xffffff, 0.5));
+
+let currentVRM = null;
+let currentViseme = 'sil';
+let currentEmotion = 'neutral';
+
+const loader = new GLTFLoader();
+loader.register((parser) => new VRMLoaderPlugin(parser));
+
+loader.load(
+  modelUrl,
+  (gltf) => {
+    const vrm = gltf.userData.vrm;
+    VRMUtils.removeUnnecessaryJoints(gltf.scene);
+    VRMUtils.removeUnnecessaryVertices(gltf.scene);
+    scene.add(gltf.scene);
+    currentVRM = vrm;
+    console.log('VRM loaded:', vrm.meta?.title || 'unknown');
+  },
+  (progress) => console.log('Loading:', (progress.loaded / progress.total * 100) + '%'),
+  (error) => console.error('VRM load error:', error)
+);
+
+function applyViseme(vrm, viseme) {
+  if (!vrm || !vrm.expressionManager) return;
+  vrm.expressionManager.setValue('aa', 0);
+  vrm.expressionManager.setValue('ih', 0);
+  vrm.expressionManager.setValue('ou', 0);
+  vrm.expressionManager.setValue('oh', 0);
+  vrm.expressionManager.setValue('ee', 0);
+
+  const map = {
+    'aa': 0.8, 'E': 0.6, 'ih': 0.5, 'oh': 0.7, 'ou': 0.6,
+    'PP': 0.3, 'FF': 0.4, 'TH': 0.3, 'DD': 0.3, 'kk': 0.3,
+    'CH': 0.4, 'SS': 0.3, 'nn': 0.2, 'RR': 0.3, 'sil': 0,
+  };
+  const expr = {'aa': 'aa', 'E': 'ee', 'ih': 'ih', 'oh': 'oh', 'ou': 'ou'};
+  if (expr[viseme]) {
+    vrm.expressionManager.setValue(expr[viseme], map[viseme] || 0);
+  }
+}
+
+function applyEmotion(vrm, emotion) {
+  if (!vrm || !vrm.expressionManager) return;
+  vrm.expressionManager.setValue('happy', 0);
+  vrm.expressionManager.setValue('angry', 0);
+  vrm.expressionManager.setValue('sad', 0);
+  vrm.expressionManager.setValue('surprised', 0);
+
+  const emotions = {
+    'happy': 'happy', 'angry': 'angry', 'sad': 'sad', 'surprised': 'surprised'
+  };
+  if (emotions[emotion]) {
+    vrm.expressionManager.setValue(emotions[emotion], 0.7);
+  }
+}
+
+window.addEventListener('message', (e) => {
+  if (e.data.viseme) currentViseme = e.data.viseme;
+  if (e.data.emotion) currentEmotion = e.data.emotion;
+});
+
+const clock = new THREE.Clock();
+function animate() {
+  requestAnimationFrame(animate);
+  const delta = clock.getDelta();
+
+  if (currentVRM) {
+    currentVRM.update(delta);
+    applyViseme(currentVRM, currentViseme);
+    applyEmotion(currentVRM, currentEmotion);
+  }
+
+  renderer.render(scene, camera);
+}
+animate();
+</script>
+</body>
+</html>

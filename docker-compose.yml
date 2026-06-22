@@ -1,0 +1,82 @@
+# Odysseus TG Voice Bot — full stack.
+# One network; services reach each other by name (anthropic_proxy, odysseus,
+# odysseus_shim, voice_bridge).
+#
+#   docker compose up -d --build        # or: docker-compose up -d --build
+#
+# Brain chain: voice_bridge -> odysseus_shim -> odysseus -> anthropic_proxy -> OpenModel.ai
+
+services:
+  anthropic_proxy:
+    build: ./proxy
+    env_file: .env
+    ports:
+      - "127.0.0.1:9100:9100"
+    restart: unless-stopped
+
+  chromadb:
+    image: docker.io/chromadb/chroma:latest
+    volumes:
+      - chromadb-data:/chroma/chroma
+    environment:
+      - ANONYMIZED_TELEMETRY=FALSE
+    restart: unless-stopped
+
+  odysseus:
+    build: ./odysseus
+    ports:
+      - "127.0.0.1:7000:7000"
+    volumes:
+      - ./odysseus/data:/app/data:z
+      - ./odysseus/logs:/app/logs:z
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    environment:
+      # --- auth off: services live on a private docker network only ---
+      - AUTH_ENABLED=false
+      - LOCALHOST_BYPASS=false
+      - DATABASE_URL=sqlite:///./data/app.db
+      - CHROMADB_HOST=chromadb
+      - CHROMADB_PORT=8000
+      - ALLOWED_ORIGINS=http://localhost,http://127.0.0.1
+      - SECURE_COOKIES=false
+      - FASTEMBED_MODEL=sentence-transformers/all-MiniLM-L6-v2
+      - PUID=${PUID:-1000}
+      - PGID=${PGID:-1000}
+    depends_on:
+      - chromadb
+    restart: unless-stopped
+
+  odysseus_shim:
+    build: ./odysseus_shim
+    env_file: .env
+    ports:
+      - "127.0.0.1:9200:9200"
+    environment:
+      - ODYSSEUS_URL=http://odysseus:7000
+      - ANTHROPIC_PROXY_URL=http://anthropic_proxy:9100/v1
+    depends_on:
+      - odysseus
+      - anthropic_proxy
+    restart: unless-stopped
+
+  voice_bridge:
+    build: ./voice_bridge
+    env_file: .env
+    environment:
+      - BRAIN_BACKEND=odysseus
+      - BRAIN_URL=http://odysseus_shim:9200/v1
+      - SESSIONS_DIR=/app/sessions
+    volumes:
+      - ./voice_bridge/sessions:/app/sessions:z
+      - ./prompts:/app/prompts:ro
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    tty: true
+    stdin_open: true
+    depends_on:
+      - odysseus_shim
+    restart: unless-stopped
+
+volumes:
+  chromadb-data:
