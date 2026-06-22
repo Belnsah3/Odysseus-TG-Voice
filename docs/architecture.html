@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Odysseus TG Voice — Architecture</title>
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+  <style>
+    body { font-family: system-ui, -apple-system, sans-serif; background:#0b1020; color:#e4e8f3; margin:0; padding:2rem; }
+    h1 { text-align:center; color:#7dd3fc; }
+    .diagram { display:flex; justify-content:center; margin:2rem 0; }
+    .legend { max-width:720px; margin:0 auto; line-height:1.6; color:#a9b3d1; }
+    .legend b { color:#f0abfc; }
+  </style>
+</head>
+<body>
+  <h1>🎙️ Odysseus TG Voice — Architecture</h1>
+  <div class="diagram">
+    <pre class="mermaid">
+flowchart TB
+    TG["📞 Telegram Group Call\nOpus 48k stereo"] <-- pytgcalls --> VB["🎛️ voice_bridge"]
+
+    subgraph VB[" "]
+        TPT["TelegramTransport\npipecat custom I/O"]
+        STT["🎤 Deepgram STT\nnova-3 / ru"]
+        MEM["🧠 LLMContext\nmemory"]
+        LLM["💬 OpenAI LLM\nvia odysseus_shim"]
+        TTS["🔊 Cartesia TTS\nsonic-3.5 / ru"]
+        EMOT["😊 emotion picker"]
+    end
+
+    SHIM["⚙️ odysseus_shim :9200"]
+    ODY["🧩 Odysseus brain :7000"]
+
+    TPT -- mono PCM --> STT
+    STT -- final text --> MEM
+    MEM -- messages --> LLM
+    LLM -- text --> EMOT
+    EMOT -- emotion + text --> TTS
+    TTS -- raw PCM --> TPT
+    LLM <-- OpenAI API --> SHIM
+    SHIM <-- native chat --> ODY
+
+    style TG fill:#1e3a5f,stroke:#7dd3fc,stroke-width:2px
+    style VB fill:#12203d,stroke:#38bdf8,stroke-width:2px
+    style ODY fill:#2a1b3d,stroke:#f0abfc,stroke-width:2px
+    </pre>
+  </div>
+
+  <div class="legend">
+    <p><b>TelegramTransport</b> is a custom pipecat FrameProcessor that bridges pytgcalls with the pipeline.</p>
+    <p><b>Emotion picker</b> sets Cartesia emotion dynamically based on the text being spoken.</p>
+    <p><b>Key rotation</b> for Deepgram and Cartesia keeps the bot resilient to rate limits.</p>
+  </div>
+
+  <script>
+    mermaid.initialize({ startOnLoad:true, theme:'dark' });
+  </script>
+</body>
+</html>

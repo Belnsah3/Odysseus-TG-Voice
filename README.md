@@ -14,37 +14,39 @@ and replies with a natural Russian voice.
 
 ## 🏗️ Architecture
 
+```mermaid
+flowchart TB
+    subgraph TG["Telegram Group Call"]
+        OPUS["Opus audio"]
+    end
+
+    subgraph VB["voice_bridge"]
+        PTG["pytgcalls userbot"]
+        TPT["TelegramTransport"]
+        STT["Deepgram STT"]
+        LLM["OpenAI LLM"]
+        TTS["Cartesia TTS"]
+        MEM["LLMContext memory"]
+    end
+
+    subgraph BRAIN["Odysseus brain"]
+        SHIM["odysseus_shim :9200"]
+        ODY["Odysseus :7000"]
+    end
+
+    OPUS <-- 48k stereo --> PTG
+    PTG <-- InputAudioRawFrame --> TPT
+    TPT -- mono --> STT
+    STT -- text --> MEM
+    MEM -- LLMMessagesFrame --> LLM
+    LLM -- text --> TTS
+    TTS -- OutputAudioRawFrame --> TPT
+    TPT -- stereo --> PTG
+    LLM <-- OpenAI API --> SHIM
+    SHIM <-- native chat --> ODY
 ```
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                             Telegram Group Call                              │
-│                    Opus audio ◀────────────────▶ pytgcalls                   │
-└─────────────────────────────────┬───────────────────────────────────────────┘
-                                  │
-                    ┌─────────────▼──────────────┐
-                    │    voice_bridge (userbot)   │
-                    │  ┌──────────────────────┐  │
-                    │  │ TelegramTransport    │  │
-                    │  │ (custom pipecat I/O) │  │
-                    │  └──────────────────────┘  │
-                    │            │                │
-                    │  ┌─────────▼──────────┐    │
-                    │  │  Deepgram STT      │    │
-                    │  │  Cartesia TTS      │    │
-                    │  │  OpenAI LLM        │    │
-                    │  │  (odysseus_shim)   │    │
-                    │  └────────────────────┘    │
-                    └─────────────┬──────────────┘
-                                  │
-                    ┌─────────────▼──────────────┐
-                    │     odysseus_shim :9200    │
-                    │   OpenAI-compatible shim   │
-                    └─────────────┬──────────────┘
-                                  │
-                    ┌─────────────▼──────────────┐
-                    │       Odysseus :7000       │
-                    │    self-hosted AI brain    │
-                    └────────────────────────────┘
-```
+
+[Open interactive architecture diagram →](docs/architecture.html)
 
 ## 🚀 Quick start
 
@@ -111,27 +113,22 @@ All settings live in `.env` (see `.env.example`).
 
 The bot persona is in `prompts/persona_odysseus.txt` (editable without rebuild).
 
-## 🧠 How the audio pipeline works
+## 🧠 Audio pipeline
 
-`voice_bridge` is now built on **pipecat-ai 1.4**:
-
-```
-TelegramTransport (input)  ──▶  DeepgramSTT  ──▶  LLMUserAggregator
-                                          │
-                                          ▼
-                                  LLMContext (memory)
-                                          │
-                                          ▼
-                                  OpenAILLMService
-                                          │
-                                          ▼
-                       EmotionCartesiaTTSService  ──▶  TelegramTransport (output)
+```mermaid
+flowchart LR
+    IN["Incoming stereo 48 kHz"] -- stereo_to_mono --> STT["Deepgram STT"]
+    STT -- final text --> USER["LLMUserAggregator"]
+    USER -- message --> CTX["LLMContext memory"]
+    CTX -- messages --> LLM["OpenAILLMService"]
+    LLM -- streaming text --> EMOT["EmotionCartesiaTTS"]
+    EMOT -- OutputAudioRawFrame --> OUT["mono_to_stereo"]
+    OUT -- stereo 48 kHz --> TG["Telegram"]
 ```
 
-- Incoming stereo 48 kHz PCM from Telegram is converted to mono for STT.
-- Outgoing Cartesia mono PCM is converted to stereo for Telegram.
-- Dynamic emotions (happy, sad, curious, surprised, angry) are picked from the text.
-- Key rotators spread load across multiple Deepgram/Cartesia keys.
+- **Dynamic emotions:** TTS emotion is picked from the text (happy, sad, curious, surprised, annoyed).
+- **Key rotation:** Deepgram and Cartesia keys rotate round-robin for resilience.
+- **Interruptions:** the pipeline supports barge-in (clear queued TTS on new user speech).
 
 ## 🛡️ Safety notes
 
@@ -139,6 +136,7 @@ TelegramTransport (input)  ──▶  DeepgramSTT  ──▶  LLMUserAggregator
 - Never commit `.env`, `*.session`, or session files.
 - Internal services bind to `127.0.0.1` only.
 
-## 📜 License
+## 📜 Credits
 
-MIT — built with love, pipecat-ai, pytgcalls, Deepgram, Cartesia, and Odysseus.
+Built with [pipecat-ai](https://github.com/pipecat-ai/pipecat), [pytgcalls](https://github.com/pytgcalls/pytgcalls),
+[Deepgram](https://deepgram.com), [Cartesia](https://cartesia.ai), and [Odysseus](https://github.com/pewdiepie-archdaemon/odysseus).
