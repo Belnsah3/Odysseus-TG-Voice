@@ -51,6 +51,8 @@ def _headers() -> dict[str, str]:
 
 
 
+
+
 class OdysseusBridge:
     def __init__(self) -> None:
         self._endpoint_id: Optional[str] = None
@@ -102,7 +104,7 @@ class OdysseusBridge:
         sid = ""
         async with self._client() as c:
             form = {
-                "name": f"hermes-{logical_id}",
+                "name": f"odysseus-{logical_id}",
                 "model": MODEL,
                 "skip_validation": "true",
             }
@@ -123,8 +125,6 @@ class OdysseusBridge:
         self._sessions[logical_id] = rec
         return rec
 
-
-
     async def stream_chat(
         self, logical_id: str, system_prompt: str, user_text: str
     ) -> AsyncGenerator[str, None]:
@@ -141,7 +141,7 @@ class OdysseusBridge:
 
         form = {"message": message, "session": ody_session, "mode": "chat",
                 "use_rag": "false"}
-        async with httpx.AsyncClient(timeout=REQUEST_TIMEOUT, headers=_headers()) as c:
+        async with self._client() as c:
             async with c.stream(
                 "POST", f"{ODYSSEUS_URL}/api/chat_stream", data=form
             ) as resp:

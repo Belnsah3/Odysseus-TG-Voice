@@ -8,6 +8,10 @@ import asyncio
 import logging
 import sys
 
+from dotenv import load_dotenv
+
+load_dotenv(override=True)
+
 from voice_bridge import config
 from voice_bridge.odysseus_tools import register_default_tools
 from voice_bridge.pipecat_bot import BotApp

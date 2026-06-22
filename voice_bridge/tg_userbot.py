@@ -1,4 +1,20 @@
-"""Telethon userbot: control Odysseus from DMs or in-chat commands."""
+"""Telethon userbot: control Odysseus from DMs or in-chat commands.
+
+Owner DM (@go_minetik): send commands in private messages to the userbot account.
+In a group: outgoing /odysseus ... still works.
+
+Commands:
+  /odysseus call              start/join video chat in TG_TEST_GROUP (creates call if needed)
+  /odysseus join [chat_id]    join active call (in this chat, or target id from DM)
+  /odysseus leave [chat_id]
+  /odysseus mute|unmute [chat_id]
+  /odysseus reset [chat_id]
+  /odysseus prompt <text>
+  /odysseus say <text> [chat_id]
+  /odysseus groups
+  /odysseus info [chat_id]
+  /odysseus help
+"""
 from __future__ import annotations
 
 import json
@@ -7,15 +23,15 @@ import os
 import re
 
 from telethon import TelegramClient, events
-from telethon.errors import ChatAdminRequiredError
+from telethon.errors import ChatAdminRequiredError, RPCError
 from telethon.tl.types import User
 
 from pytgcalls.exceptions import NoActiveGroupCall
 
 from voice_bridge import config
 from voice_bridge.pipecat_bot import BotApp
-from voice_bridge.sessions import store
 from voice_bridge.say_injector import say_in_call
+from voice_bridge.sessions import store
 from voice_bridge.tg_group_info import (
     get_group_call_info,
     list_groups,
@@ -65,6 +81,7 @@ def _parse_chat_id(token: str) -> int | None:
 
 
 def _owner_default_group() -> int:
+    """Return the owner's saved default group, or TG_TEST_GROUP_ID."""
     return store.get(config.TG_OWNER_ID).default_group_id
 
 
@@ -73,6 +90,8 @@ def _set_owner_default_group(chat_id: int) -> None:
 
 
 def _resolve_target_chat(event: events.NewMessage.Event, sub: str, rest: str) -> tuple[int, str]:
+    """Return (group_chat_id, remaining_args)."""
+    # Commands whose first positional arg is NOT a chat_id.
     if sub in ("setgroup", "prompt", "say"):
         if event.is_private and sub in ("call", "join", "leave", "mute", "unmute", "reset", "info", "say"):
             return _owner_default_group(), rest
@@ -84,11 +103,13 @@ def _resolve_target_chat(event: events.NewMessage.Event, sub: str, rest: str) ->
     if parts and _parse_chat_id(parts[0]) is not None:
         return int(parts[0]), " ".join(parts[1:])
 
+    # DM with owner: default to the configured default group
     if event.is_private and sub in (
         "call", "join", "leave", "mute", "unmute", "reset", "info", "say",
     ):
         return _owner_default_group(), rest
 
+    # Inside a group/supergroup — use this chat
     if not event.is_private:
         return event.chat_id, rest
 
@@ -108,13 +129,13 @@ async def _reply(event: events.NewMessage.Event, text: str) -> None:
 
 def register_commands(client: TelegramClient, app: BotApp) -> None:
     @client.on(events.NewMessage(pattern=r"^/help(?:\s+.*)?$"))
-    async def _help_cmd(event: events.NewMessage.Event):
+    async def _help_cmd(event: events.NewMessage.Event):  # noqa: ANN001
         if not await _is_owner(event):
             return
         await _reply(event, HELP)
 
     @client.on(events.NewMessage(pattern=r"^/odysseus(?:\s+(.*))?$"))
-    async def _cmd(event: events.NewMessage.Event):
+    async def _cmd(event: events.NewMessage.Event):  # noqa: ANN001
         if not await _is_owner(event):
             return
 
@@ -139,19 +160,10 @@ def register_commands(client: TelegramClient, app: BotApp) -> None:
                 else:
                     await _reply(
                         event,
-                        f"Odysseus: создаю видеочат в группе {target_chat}…",
+                        f"Odysseus: в группе {target_chat} нет активного звонка.\n"
+                        "Запусти звонок вручную или используй /odysseus join",
                     )
-                    try:
-                        await app.join_call(target_chat)
-                    except ChatAdminRequiredError:
-                        await _reply(
-                            event,
-                            "Odysseus: не могу создать звонок — @goCACATI не админ группы.\n\n"
-                            "Варианты:\n"
-                            "• Назначь @goCACATI админом (право «Управление видеочатами»)\n"
-                            "• Или запусти звонок вручную в Telegram → /odysseus join",
-                        )
-                        return
+                    return
                 if app._transport:
                     await say_in_call(app._transport, "Всем привет, Odysseus на связи.")
                 await _reply(event, f"Odysseus: в звонке (группа {target_chat}). Слушаю.")
@@ -231,7 +243,7 @@ def register_commands(client: TelegramClient, app: BotApp) -> None:
                     flag = "📞" if r["active_call"] else "  "
                     mark = " *" if r["chat_id"] == default else ""
                     lines.append(f"{flag} {r['chat_id']} | {r['title']}{mark}")
-                lines.append("\n* группа по умолчанию")
+                lines.append(f"\n* группа по умолчанию")
                 await _reply(event, "\n".join(lines))
 
             elif sub == "info":

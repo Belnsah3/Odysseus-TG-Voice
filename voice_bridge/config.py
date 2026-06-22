@@ -115,7 +115,7 @@ def load_persona() -> str:
         with open(PERSONA_FILE, encoding="utf-8") as f:
             return f.read().strip()
     except OSError:
-        return "Ты — Odysseus, дружелюбная ведущий голосового чата. Отвечай кратко по-русски."
+        return "Ты — Odysseus, дружелюбный ведущий голосового чата. Отвечай кратко по-русски."
 
 
 def proxy_url_for(kind: str | None = None) -> str:
